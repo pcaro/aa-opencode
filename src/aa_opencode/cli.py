@@ -7,7 +7,13 @@ import os
 import sys
 
 from aa_opencode import __version__
-from aa_opencode.clients import CATALOGS, fetch_aa_models, fetch_modalities, fetch_opencode_models
+from aa_opencode.clients import (
+    CATALOGS,
+    blended_3_to_1,
+    fetch_aa_models,
+    fetch_catalog_metadata,
+    fetch_opencode_models,
+)
 from aa_opencode.matching import match_model
 from aa_opencode.output import build_record, render_human, render_json
 
@@ -99,13 +105,18 @@ def main(argv: list[str] | None = None) -> int:
 
     aa_models = fetch_aa_models(api_key)
     opencode_ids = fetch_opencode_models(opencode_url)
-    modalities = fetch_modalities(args.catalog)
+    metadata = fetch_catalog_metadata(args.catalog)
 
     records = [
         build_record(model_id, match_model(model_id, aa_models)) for model_id in opencode_ids
     ]
     for record in records:
-        record["multimodal"] = "image" in modalities.get(record["opencode_id"], set())
+        meta = metadata.get(record["opencode_id"], {})
+        record["multimodal"] = "image" in meta.get("modalities", set())
+        cost = meta.get("cost", {})
+        record["go_price_blended_1m"] = blended_3_to_1(cost)
+        record["go_price_input_1m"] = cost.get("input")
+        record["go_price_output_1m"] = cost.get("output")
 
     records = sort_records(records, args.sort)
 

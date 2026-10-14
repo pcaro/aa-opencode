@@ -39,13 +39,25 @@ def fetch_opencode_models(url: str) -> list[str]:
     return [m["id"] for m in payload.get("data", [])]
 
 
-def fetch_modalities(catalog: str) -> dict[str, set[str]]:
-    """Return {model_id: set(input modalities)} for a catalog, from models.dev."""
+def blended_3_to_1(cost: dict) -> float | None:
+    """Compute the 3:1 blended price per 1M tokens from input/output prices."""
+    input_price = cost.get("input")
+    output_price = cost.get("output")
+    if input_price is None or output_price is None:
+        return None
+    return (3 * input_price + output_price) / 4
+
+
+def fetch_catalog_metadata(catalog: str) -> dict[str, dict]:
+    """Return {model_id: {"modalities": set, "cost": dict}} from models.dev."""
     key = CATALOGS[catalog][1]
     resp = httpx.get(MODELS_DEV_ENDPOINT, timeout=30.0)
     resp.raise_for_status()
     models = resp.json().get(key, {}).get("models", {})
     return {
-        model_id: set(model.get("modalities", {}).get("input", []))
+        model_id: {
+            "modalities": set(model.get("modalities", {}).get("input", [])),
+            "cost": model.get("cost") or {},
+        }
         for model_id, model in models.items()
     }
