@@ -55,7 +55,6 @@ def render_human(records: list[dict], show_unmatched: bool) -> None:
     table.add_column("Creator")
     table.add_column("Intelligence", justify="right")
     table.add_column("Coding", justify="right")
-    table.add_column("Math", justify="right")
     table.add_column("Speed (tok/s)", justify="right")
     table.add_column("TTFT (s)", justify="right")
     table.add_column("Price $/1M", justify="right")
@@ -66,7 +65,6 @@ def render_human(records: list[dict], show_unmatched: bool) -> None:
             r["creator"] or "—",
             _fmt(r["intelligence_index"]),
             _fmt(r["coding_index"]),
-            _fmt(r["math_index"]),
             _fmt(r["output_tokens_per_second"]),
             _fmt(r["time_to_first_token_seconds"]),
             _fmt(r["price_blended_1m"], prefix="$"),
