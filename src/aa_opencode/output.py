@@ -13,6 +13,13 @@ INTELLIGENCE_KEY = "artificial_analysis_intelligence_index"
 CODING_KEY = "artificial_analysis_coding_index"
 MATH_KEY = "artificial_analysis_math_index"
 
+# Best-value categories: (label, quality field, multimodal-only).
+VALUE_CATEGORIES = [
+    ("Código", "coding_index", False),
+    ("Imágenes", "intelligence_index", True),
+    ("General", "intelligence_index", False),
+]
+
 
 def build_record(opencode_id: str, aa_model: dict | None) -> dict:
     """Flatten an AA model entry into a single record for one OpenCode model."""
@@ -45,7 +52,52 @@ def _fmt(value: float | None, prefix: str = "", digits: int = 1) -> str:
     return f"{prefix}{value:.{digits}f}"
 
 
-def render_human(records: list[dict], show_unmatched: bool) -> None:
+def _best_value(
+    records: list[dict], quality_key: str, top_n: int, multimodal_only: bool
+) -> list[tuple[float, dict]]:
+    """Rank matched models by quality/price ratio, returning (ratio, record) pairs."""
+    scored: list[tuple[float, dict]] = []
+    for record in records:
+        if not record["matched"]:
+            continue
+        if multimodal_only and not record.get("multimodal"):
+            continue
+        quality = record.get(quality_key)
+        price = record.get("price_blended_1m")
+        if quality is None or price is None or price <= 0:
+            continue
+        scored.append((quality / price, record))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return scored[:top_n]
+
+
+def _render_value_table(records: list[dict], top_n: int) -> None:
+    console = Console()
+    table = Table(title="Mejores calidad/precio")
+    table.add_column("Categoría", style="bold")
+    table.add_column("#", justify="right")
+    table.add_column("Modelo")
+    table.add_column("Índice", justify="right")
+    table.add_column("Precio $/1M", justify="right")
+    table.add_column("Calidad/Precio", justify="right")
+
+    for label, quality_key, multimodal_only in VALUE_CATEGORIES:
+        for rank, (ratio, record) in enumerate(
+            _best_value(records, quality_key, top_n, multimodal_only), start=1
+        ):
+            table.add_row(
+                label,
+                str(rank),
+                record["opencode_id"],
+                _fmt(record[quality_key]),
+                _fmt(record["price_blended_1m"], prefix="$"),
+                _fmt(ratio, digits=0),
+            )
+
+    console.print(table)
+
+
+def render_human(records: list[dict], show_unmatched: bool, top_n: int) -> None:
     console = Console()
     matched = [r for r in records if r["matched"]]
     unmatched = [r for r in records if not r["matched"]]
@@ -71,6 +123,7 @@ def render_human(records: list[dict], show_unmatched: bool) -> None:
         )
 
     console.print(table)
+    _render_value_table(records, top_n)
 
     if unmatched:
         console.print(f"[dim]{len(unmatched)} modelo(s) sin datos en Artificial Analysis.[/dim]")
@@ -80,7 +133,7 @@ def render_human(records: list[dict], show_unmatched: bool) -> None:
 
     console.print(
         "[dim]Datos: https://artificialanalysis.ai/ (atribución requerida). "
-        "Precio = blended 3:1 por 1M tokens.[/dim]"
+        "Precio = blended 3:1 por 1M tokens. Calidad/Precio = índice ÷ precio.[/dim]"
     )
 
 

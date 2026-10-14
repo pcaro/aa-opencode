@@ -7,7 +7,7 @@ import os
 import sys
 
 from aa_opencode import __version__
-from aa_opencode.clients import OPENCODE_MODELS_ENDPOINT, fetch_aa_models, fetch_opencode_models
+from aa_opencode.clients import CATALOGS, fetch_aa_models, fetch_modalities, fetch_opencode_models
 from aa_opencode.matching import match_model
 from aa_opencode.output import build_record, render_human, render_json
 
@@ -55,9 +55,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="API key de Artificial Analysis (por defecto lee ARTIFICIAL_ANALYSIS_API_KEY).",
     )
     parser.add_argument(
+        "--catalog",
+        choices=tuple(CATALOGS),
+        default="go",
+        help="Catálogo de modelos de OpenCode (por defecto go).",
+    )
+    parser.add_argument(
         "--opencode-url",
-        default=OPENCODE_MODELS_ENDPOINT,
-        help="Endpoint de modelos de OpenCode (por defecto %(default)s).",
+        help="Endpoint de modelos de OpenCode (anula --catalog).",
     )
     parser.add_argument(
         "--format",
@@ -72,6 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Criterio de ordenación (por defecto intelligence).",
     )
     parser.add_argument(
+        "--top",
+        type=int,
+        default=3,
+        help="Número de modelos a mostrar en el ranking calidad/precio (por defecto 3).",
+    )
+    parser.add_argument(
         "--show-unmatched",
         action="store_true",
         help="Lista también los modelos sin datos en Artificial Analysis (solo human).",
@@ -84,18 +95,24 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     api_key = resolve_api_key(args.api_key)
 
+    opencode_url = args.opencode_url or CATALOGS[args.catalog][0]
+
     aa_models = fetch_aa_models(api_key)
-    opencode_ids = fetch_opencode_models(args.opencode_url)
+    opencode_ids = fetch_opencode_models(opencode_url)
+    modalities = fetch_modalities(args.catalog)
 
     records = [
         build_record(model_id, match_model(model_id, aa_models)) for model_id in opencode_ids
     ]
+    for record in records:
+        record["multimodal"] = "image" in modalities.get(record["opencode_id"], set())
+
     records = sort_records(records, args.sort)
 
     if args.format == "json":
-        print(render_json(records, args.opencode_url))
+        print(render_json(records, opencode_url))
     else:
-        render_human(records, args.show_unmatched)
+        render_human(records, args.show_unmatched, args.top)
 
     return 0
 
