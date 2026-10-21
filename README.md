@@ -58,7 +58,7 @@ aa-opencode --api-key "tu-key"
 | Opción | Por defecto | Descripción |
 | --- | --- | --- |
 | `--api-key` | — | API key de Artificial Analysis. Tiene prioridad sobre las variables de entorno. |
-| `--catalog {go,zen}` | `go` | Catálogo de modelos de OpenCode que se compara. |
+| `--catalog {go,zen}` | `go` | Catálogo de modelos de OpenCode que se compara. También determina la fuente del precio y las etiquetas de la salida. |
 | `--opencode-url` | — | Endpoint de modelos propio. Anula `--catalog`. |
 | `--format {human,json}` | `human` | Formato de salida. |
 | `--sort` | `intelligence` | Criterio de orden: `intelligence`, `coding`, `math`, `speed`, `ttft`, `price` o `name`. |
@@ -66,6 +66,9 @@ aa-opencode --api-key "tu-key"
 | `--show-unmatched` | — | Lista los modelos sin datos en Artificial Analysis (solo en la salida humana). |
 
 ## Salida
+
+Las etiquetas de precio de las tres tablas llevan el nombre del catálogo elegido, así que
+con `--catalog zen` verás `Zen $/1M` y `precio Zen` en lugar de las de Go.
 
 ### Tabla principal
 

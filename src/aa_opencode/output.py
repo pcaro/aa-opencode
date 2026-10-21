@@ -89,14 +89,14 @@ def _best_deals(records: list[dict], top_n: int) -> list[tuple[float, dict]]:
     return deals[:top_n]
 
 
-def _render_value_table(records: list[dict], top_n: int) -> None:
+def _render_value_table(records: list[dict], top_n: int, catalog: str) -> None:
     console = Console()
-    table = Table(title="Mejores calidad/precio (precio Go)")
+    table = Table(title=f"Mejores calidad/precio (precio {catalog.capitalize()})")
     table.add_column("Categoría", style="bold")
     table.add_column("#", justify="right")
     table.add_column("Modelo")
     table.add_column("Índice", justify="right")
-    table.add_column("Precio Go $/1M", justify="right")
+    table.add_column(f"Precio {catalog.capitalize()} $/1M", justify="right")
     table.add_column("Calidad/Precio", justify="right")
 
     for label, quality_key, multimodal_only in VALUE_CATEGORIES:
@@ -115,12 +115,12 @@ def _render_value_table(records: list[dict], top_n: int) -> None:
     console.print(table)
 
 
-def _render_deals_table(records: list[dict], top_n: int) -> None:
+def _render_deals_table(records: list[dict], top_n: int, catalog: str) -> None:
     console = Console()
-    table = Table(title="Buenas ofertas Go (vs precio AA)")
+    table = Table(title=f"Buenas ofertas {catalog.capitalize()} (vs precio AA)")
     table.add_column("Modelo", style="bold")
     table.add_column("Precio AA $/1M", justify="right")
-    table.add_column("Precio Go $/1M", justify="right")
+    table.add_column(f"Precio {catalog.capitalize()} $/1M", justify="right")
     table.add_column("Ahorro %", justify="right")
 
     for discount, record in _best_deals(records, top_n):
@@ -134,10 +134,11 @@ def _render_deals_table(records: list[dict], top_n: int) -> None:
     console.print(table)
 
 
-def render_human(records: list[dict], show_unmatched: bool, top_n: int) -> None:
+def render_human(records: list[dict], show_unmatched: bool, top_n: int, catalog: str) -> None:
     console = Console()
     matched = [r for r in records if r["matched"]]
     unmatched = [r for r in records if not r["matched"]]
+    price_label = catalog.capitalize()
 
     table = Table(title="OpenCode models vs Artificial Analysis benchmarks")
     table.add_column("Model", style="bold")
@@ -146,7 +147,7 @@ def render_human(records: list[dict], show_unmatched: bool, top_n: int) -> None:
     table.add_column("Coding", justify="right")
     table.add_column("Speed (tok/s)", justify="right")
     table.add_column("TTFT (s)", justify="right")
-    table.add_column("Go $/1M", justify="right")
+    table.add_column(f"{price_label} $/1M", justify="right")
 
     for r in matched:
         table.add_row(
@@ -160,8 +161,8 @@ def render_human(records: list[dict], show_unmatched: bool, top_n: int) -> None:
         )
 
     console.print(table)
-    _render_value_table(records, top_n)
-    _render_deals_table(records, top_n)
+    _render_value_table(records, top_n, catalog)
+    _render_deals_table(records, top_n, catalog)
 
     if unmatched:
         console.print(f"[dim]{len(unmatched)} modelo(s) sin datos en Artificial Analysis.[/dim]")
@@ -171,8 +172,9 @@ def render_human(records: list[dict], show_unmatched: bool, top_n: int) -> None:
 
     console.print(
         "[dim]Datos: https://artificialanalysis.ai/ (atribución requerida). "
-        "Precio Go = blended 3:1 por 1M tokens. Calidad/Precio = índice ÷ precio Go. "
-        "Ahorro = (precio AA − precio Go) ÷ precio AA.[/dim]"
+        f"Precio {price_label} = blended 3:1 por 1M tokens. "
+        f"Calidad/Precio = índice ÷ precio {price_label}. "
+        f"Ahorro = (precio AA − precio {price_label}) ÷ precio AA.[/dim]"
     )
 
 

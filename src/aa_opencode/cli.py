@@ -123,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.format == "json":
         print(render_json(records, opencode_url))
     else:
-        render_human(records, args.show_unmatched, args.top)
+        render_human(records, args.show_unmatched, args.top, args.catalog)
 
     return 0
 
