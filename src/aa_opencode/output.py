@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from rich.console import Console
 from rich.table import Table
 
+from aa_opencode.clients import blended_3_to_1
+
 # Evaluation keys exposed by the free Artificial Analysis API.
 INTELLIGENCE_KEY = "artificial_analysis_intelligence_index"
 CODING_KEY = "artificial_analysis_coding_index"
-MATH_KEY = "artificial_analysis_math_index"
 
 # Best-value categories: (label, quality field, multimodal-only).
 VALUE_CATEGORIES = [
@@ -28,7 +29,10 @@ def build_record(opencode_id: str, aa_model: dict | None) -> dict:
 
     evaluations = aa_model.get("evaluations") or {}
     pricing = aa_model.get("pricing") or {}
+    performance = aa_model.get("performance") or {}
     creator = aa_model.get("model_creator") or {}
+    price_input = pricing.get("price_1m_input_tokens")
+    price_output = pricing.get("price_1m_output_tokens")
     return {
         "opencode_id": opencode_id,
         "matched": True,
@@ -37,12 +41,11 @@ def build_record(opencode_id: str, aa_model: dict | None) -> dict:
         "creator": creator.get("name"),
         "intelligence_index": evaluations.get(INTELLIGENCE_KEY),
         "coding_index": evaluations.get(CODING_KEY),
-        "math_index": evaluations.get(MATH_KEY),
-        "output_tokens_per_second": aa_model.get("median_output_tokens_per_second"),
-        "time_to_first_token_seconds": aa_model.get("median_time_to_first_token_seconds"),
-        "price_blended_1m": pricing.get("price_1m_blended_3_to_1"),
-        "price_input_1m": pricing.get("price_1m_input_tokens"),
-        "price_output_1m": pricing.get("price_1m_output_tokens"),
+        "output_tokens_per_second": performance.get("median_output_tokens_per_second"),
+        "time_to_first_token_seconds": performance.get("median_time_to_first_token_seconds"),
+        "price_blended_1m": blended_3_to_1(price_input, price_output),
+        "price_input_1m": price_input,
+        "price_output_1m": price_output,
     }
 
 
@@ -134,7 +137,13 @@ def _render_deals_table(records: list[dict], top_n: int, catalog: str) -> None:
     console.print(table)
 
 
-def render_human(records: list[dict], show_unmatched: bool, top_n: int, catalog: str) -> None:
+def render_human(
+    records: list[dict],
+    show_unmatched: bool,
+    top_n: int,
+    catalog: str,
+    index_version: float | None,
+) -> None:
     console = Console()
     matched = [r for r in records if r["matched"]]
     unmatched = [r for r in records if not r["matched"]]
@@ -172,16 +181,18 @@ def render_human(records: list[dict], show_unmatched: bool, top_n: int, catalog:
 
     console.print(
         "[dim]Datos: https://artificialanalysis.ai/ (atribución requerida). "
+        f"Intelligence Index v{index_version:g}. "
         f"Precio {price_label} = blended 3:1 por 1M tokens. "
         f"Calidad/Precio = índice ÷ precio {price_label}. "
         f"Ahorro = (precio AA − precio {price_label}) ÷ precio AA.[/dim]"
     )
 
 
-def render_json(records: list[dict], opencode_url: str) -> str:
+def render_json(records: list[dict], opencode_url: str, index_version: float | None) -> str:
     payload = {
         "source": "https://artificialanalysis.ai/",
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "intelligence_index_version": index_version,
         "opencode_url": opencode_url,
         "models": records,
     }

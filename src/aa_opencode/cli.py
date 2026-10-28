@@ -20,7 +20,6 @@ from aa_opencode.output import build_record, render_human, render_json
 SORT_KEYS = {
     "intelligence": "intelligence_index",
     "coding": "coding_index",
-    "math": "math_index",
     "speed": "output_tokens_per_second",
     "ttft": "time_to_first_token_seconds",
     "price": "price_blended_1m",
@@ -103,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
 
     opencode_url = args.opencode_url or CATALOGS[args.catalog][0]
 
-    aa_models = fetch_aa_models(api_key)
+    aa_models, index_version = fetch_aa_models(api_key)
     opencode_ids = fetch_opencode_models(opencode_url)
     metadata = fetch_catalog_metadata(args.catalog)
 
@@ -114,16 +113,16 @@ def main(argv: list[str] | None = None) -> int:
         meta = metadata.get(record["opencode_id"], {})
         record["multimodal"] = "image" in meta.get("modalities", set())
         cost = meta.get("cost", {})
-        record["go_price_blended_1m"] = blended_3_to_1(cost)
+        record["go_price_blended_1m"] = blended_3_to_1(cost.get("input"), cost.get("output"))
         record["go_price_input_1m"] = cost.get("input")
         record["go_price_output_1m"] = cost.get("output")
 
     records = sort_records(records, args.sort)
 
     if args.format == "json":
-        print(render_json(records, opencode_url))
+        print(render_json(records, opencode_url, index_version))
     else:
-        render_human(records, args.show_unmatched, args.top, args.catalog)
+        render_human(records, args.show_unmatched, args.top, args.catalog, index_version)
 
     return 0
 

@@ -1,6 +1,6 @@
 [project]
 name = "aa-opencode"
-version = "0.1.0"
+version = "0.2.0"
 description = "Compare the models offered by OpenCode against Artificial Analysis benchmarks (intelligence, speed, price)."
 readme = "README.md"
 requires-python = ">=3.10"
