@@ -73,36 +73,44 @@ con `--catalog zen` verás `Zen $/1M` y `precio Zen` en lugar de las de Go.
 ### Tabla principal
 
 Un modelo de OpenCode por fila, con los datos de Artificial Analysis y el precio que
-cobra OpenCode. Ordenada por índice de código por defecto.
+cobra OpenCode. Ordenada por índice de código por defecto, que es la métrica que más se
+acerca a para qué se usa OpenCode.
 
 ```text
-                         OpenCode models vs Artificial Analysis benchmarks
+Aviso: ningún modelo tiene datos de «coding» ahora mismo, así que la tabla queda en el orden del catálogo. Prueba con otro --sort.
+                           OpenCode models vs Artificial Analysis benchmarks
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┓
 ┃ Model                      ┃ Creator   ┃ Intelligence ┃ Coding ┃ Speed (tok/s) ┃ TTFT (s) ┃ Go $/1M ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━┩
-│ grok-4.6                   │ SpaceXAI  │            — │   76.8 │          86.8 │     27.9 │       — │
-│ kimi-k3                    │ Kimi      │            — │   76.2 │          55.4 │      3.4 │    $6.0 │
-│ qwen3.8-max                │ Alibaba   │         33.6 │   76.2 │          40.8 │      3.0 │    $3.0 │
-│ glm-5.3                    │ Z AI      │         31.7 │   74.8 │          76.4 │      2.7 │    $2.1 │
-│ qwen3.8-flash              │ Alibaba   │            — │   73.1 │          55.4 │      2.0 │    $0.2 │
-│ glm-5.3-flash              │ Z AI      │            — │   71.5 │          77.8 │      2.7 │    $0.2 │
-│ gpt-5.6-luna               │ OpenAI    │            — │   71.4 │         126.7 │    108.7 │    $0.5 │
-│ deepseek-v4-pro            │ DeepSeek  │         23.1 │   68.8 │          80.8 │      1.7 │    $1.0 │
-│ glm-5.2                    │ Z AI      │            — │   68.8 │          95.9 │      3.3 │    $2.1 │
-│ qwen3.7-max                │ Alibaba   │            — │   66.0 │         203.5 │      2.2 │       — │
-│ kimi-k2.6                  │ Kimi      │            — │   61.8 │          57.6 │      2.7 │       — │
-│ kimi-k2.7-code             │ Kimi      │            — │   60.8 │          66.4 │      2.7 │    $1.7 │
+│ deepseek-v4.1-flash        │ DeepSeek  │            — │      — │         179.9 │      0.9 │    $0.3 │
+│ deepseek-v4-pro            │ DeepSeek  │         23.1 │      — │          74.4 │      1.6 │    $1.0 │
+│ glm-5.2                    │ Z AI      │            — │      — │          94.0 │      2.9 │    $2.1 │
+│ glm-5.3                    │ Z AI      │         31.7 │      — │          71.8 │      2.1 │    $2.1 │
+│ grok-4.7                   │ SpaceXAI  │         34.3 │      — │          94.2 │     30.6 │    $3.0 │
+│ muse-spark-1.2-contributor │ Meta      │            — │      — │             — │        — │    $0.1 │
+│ muse-spark-1.3-contributor │ Meta      │            — │      — │             — │        — │    $0.1 │
+│ glm-5.3-flash              │ Z AI      │            — │      — │          72.8 │      1.7 │    $0.2 │
+│ gpt-5.6-luna               │ OpenAI    │            — │      — │         126.5 │     94.7 │    $0.5 │
+│ gpt-6-luna                 │ OpenAI    │         27.8 │      — │         121.6 │     76.6 │    $0.2 │
+│ claude-haiku-5-5           │ Anthropic │         36.2 │      — │         240.0 │    341.1 │    $0.2 │
+│ hy3                        │ Tencent   │            — │      — │          82.2 │      2.8 │    $0.2 │
 │ …                          │ …         │            … │      … │             … │        … │       … │
 └────────────────────────────┴───────────┴──────────────┴────────┴───────────────┴──────────┴─────────┘
 ```
+
+Esta salida está capturada mientras Artificial Analysis recomputa el índice de código tras
+el salto a v5, así que la columna Coding sale entera a `—` y la tabla queda en el orden del
+catálogo. Cuando el índice vuelve, la tabla se ordena sola.
+
 
 Un `—` significa que Artificial Analysis no publica ese dato para el modelo.
 
 El Intelligence Index va por versiones mayores y **las puntuaciones no son comparables entre
 versiones**: la versión vigente sale en el pie de la tabla (hoy `v5`). Además, Artificial
-Analysis puntúa por tandas, así que solo una parte del catálogo tiene nota de inteligencia
-y el resto aparece con `—`. Por eso el orden por defecto es el índice de código, que hoy
-cubre más modelos; `--sort intelligence` deja las filas sin nota al final.
+Analysis puntúa por tandas y recomputa índices enteros cuando cambia la metodología — el de
+código, por ejemplo, se deriva de las evaluaciones del Intelligence Index y se queda vacío
+mientras lo recalculan. Cuando el campo por el que ordenas no tiene ni un dato, la tool lo
+avisa por stderr y deja la tabla en el orden del catálogo, en vez de fingir un orden.
 
 ### Ranking calidad/precio
 
