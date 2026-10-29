@@ -78,8 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sort",
         choices=tuple(SORT_KEYS),
-        default="intelligence",
-        help="Criterio de ordenación (por defecto intelligence).",
+        default="coding",
+        help="Criterio de ordenación (por defecto coding).",
     )
     parser.add_argument(
         "--top",
@@ -118,6 +118,14 @@ def main(argv: list[str] | None = None) -> int:
         record["go_price_output_1m"] = cost.get("output")
 
     records = sort_records(records, args.sort)
+
+    field = SORT_KEYS[args.sort]
+    if records and all(r.get(field) is None for r in records):
+        print(
+            f"Aviso: ningún modelo tiene datos de «{args.sort}» ahora mismo, así que la "
+            "tabla queda en el orden del catálogo. Prueba con otro --sort.",
+            file=sys.stderr,
+        )
 
     if args.format == "json":
         print(render_json(records, opencode_url, index_version))

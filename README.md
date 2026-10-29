@@ -35,7 +35,7 @@ La API key se lee, por orden de prioridad, de:
 3. La variable de entorno `AA_API_KEY`
 
 ```bash
-# Salida humana (por defecto), ordenada por inteligencia
+# Salida humana (por defecto), ordenada por índice de código
 aa-opencode
 
 # Ordenar por precio, velocidad o índice de código
@@ -61,7 +61,7 @@ aa-opencode --api-key "tu-key"
 | `--catalog {go,zen}` | `go` | Catálogo de modelos de OpenCode que se compara. También determina la fuente del precio y las etiquetas de la salida. |
 | `--opencode-url` | — | Endpoint de modelos propio. Anula `--catalog`. |
 | `--format {human,json}` | `human` | Formato de salida. |
-| `--sort` | `intelligence` | Criterio de orden: `intelligence`, `coding`, `speed`, `ttft`, `price` o `name`. |
+| `--sort` | `coding` | Criterio de orden: `coding`, `intelligence`, `speed`, `ttft`, `price` o `name`. |
 | `--top` | `3` | Modelos por categoría en el ranking calidad/precio. |
 | `--show-unmatched` | — | Lista los modelos sin datos en Artificial Analysis (solo en la salida humana). |
 
@@ -73,23 +73,25 @@ con `--catalog zen` verás `Zen $/1M` y `precio Zen` en lugar de las de Go.
 ### Tabla principal
 
 Un modelo de OpenCode por fila, con los datos de Artificial Analysis y el precio que
-cobra OpenCode. Ordenada por inteligencia por defecto.
+cobra OpenCode. Ordenada por índice de código por defecto.
 
 ```text
                          OpenCode models vs Artificial Analysis benchmarks
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┓
 ┃ Model                      ┃ Creator   ┃ Intelligence ┃ Coding ┃ Speed (tok/s) ┃ TTFT (s) ┃ Go $/1M ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━┩
-│ gemini-4-argon             │ Google    │         50.4 │      — │          82.4 │     48.7 │    $4.0 │
-│ kimi-k3.1-pro              │ Kimi      │         46.0 │      — │          42.8 │      2.8 │    $4.0 │
-│ claude-haiku-5-5           │ Anthropic │         36.2 │      — │         240.8 │    347.8 │    $0.2 │
-│ grok-4.7                   │ SpaceXAI  │         34.3 │      — │          94.2 │     67.1 │    $3.0 │
-│ qwen3.8-max                │ Alibaba   │         33.6 │   76.2 │          41.6 │      3.0 │    $3.0 │
-│ glm-5.3                    │ Z AI      │         31.7 │   74.8 │          80.9 │      2.7 │    $2.1 │
-│ mimo-v2.6-pro              │ Xiaomi    │         29.9 │      — │          62.2 │      3.4 │    $0.5 │
-│ minimax-m3.1-flash         │ MiniMax   │         28.9 │      — │         118.6 │      1.2 │    $0.3 │
-│ step-5-preview             │ StepFun   │         28.5 │      — │         182.8 │      1.0 │    $1.4 │
-│ gpt-6-luna                 │ OpenAI    │         27.8 │      — │         124.3 │     76.6 │    $0.2 │
+│ grok-4.6                   │ SpaceXAI  │            — │   76.8 │          86.8 │     27.9 │       — │
+│ kimi-k3                    │ Kimi      │            — │   76.2 │          55.4 │      3.4 │    $6.0 │
+│ qwen3.8-max                │ Alibaba   │         33.6 │   76.2 │          40.8 │      3.0 │    $3.0 │
+│ glm-5.3                    │ Z AI      │         31.7 │   74.8 │          76.4 │      2.7 │    $2.1 │
+│ qwen3.8-flash              │ Alibaba   │            — │   73.1 │          55.4 │      2.0 │    $0.2 │
+│ glm-5.3-flash              │ Z AI      │            — │   71.5 │          77.8 │      2.7 │    $0.2 │
+│ gpt-5.6-luna               │ OpenAI    │            — │   71.4 │         126.7 │    108.7 │    $0.5 │
+│ deepseek-v4-pro            │ DeepSeek  │         23.1 │   68.8 │          80.8 │      1.7 │    $1.0 │
+│ glm-5.2                    │ Z AI      │            — │   68.8 │          95.9 │      3.3 │    $2.1 │
+│ qwen3.7-max                │ Alibaba   │            — │   66.0 │         203.5 │      2.2 │       — │
+│ kimi-k2.6                  │ Kimi      │            — │   61.8 │          57.6 │      2.7 │       — │
+│ kimi-k2.7-code             │ Kimi      │            — │   60.8 │          66.4 │      2.7 │    $1.7 │
 │ …                          │ …         │            … │      … │             … │        … │       … │
 └────────────────────────────┴───────────┴──────────────┴────────┴───────────────┴──────────┴─────────┘
 ```
@@ -98,9 +100,9 @@ Un `—` significa que Artificial Analysis no publica ese dato para el modelo.
 
 El Intelligence Index va por versiones mayores y **las puntuaciones no son comparables entre
 versiones**: la versión vigente sale en el pie de la tabla (hoy `v5`). Además, Artificial
-Analysis puntúa por tandas, así que solo una parte del catálogo tiene nota de inteligencia;
-el resto aparece con `—` y cae al final al ordenar por `intelligence`. Para esos modelos el
-índice de código sigue siendo una referencia útil (`--sort coding`).
+Analysis puntúa por tandas, así que solo una parte del catálogo tiene nota de inteligencia
+y el resto aparece con `—`. Por eso el orden por defecto es el índice de código, que hoy
+cubre más modelos; `--sort intelligence` deja las filas sin nota al final.
 
 ### Ranking calidad/precio
 
