@@ -35,7 +35,6 @@ def _entry(
         "license": "Proprietary",
         "value": value,
         "rank": rank,
-        "votes": 4403,
         "publish_date": publish_date,
     }
 

@@ -65,6 +65,51 @@ def test_main_keeps_the_report_when_one_board_fails(
     assert "hf down" in captured.err
 
 
+@pytest.mark.parametrize(
+    "error",
+    [KeyError("model_name"), TypeError("'<' not supported"), ValueError("bad payload")],
+)
+def test_main_degrades_a_board_that_fails_to_normalize(
+    error: Exception, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A malformed row costs one board, not the whole report."""
+    _stub_http(monkeypatch)
+
+    def fake_fetch(board: str) -> list[dict]:
+        if board == "webdev":
+            raise error
+        return [TEXT_ROW] if board == "text" else []
+
+    monkeypatch.setattr(cli, "fetch_arena_board", fake_fetch)
+
+    assert cli.main(["--api-key", "test", "--format", "json"]) == 0
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["arena"]["available"] == ["text"]
+    assert payload["models"][0]["arena_webdev"] is None
+    assert "«webdev»" in captured.err
+
+
+def test_main_warns_once_when_every_board_fails_to_normalize(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _stub_http(monkeypatch)
+
+    def fake_fetch(board: str) -> list[dict]:
+        raise TypeError("'<' not supported between instances of 'NoneType' and 'float'")
+
+    monkeypatch.setattr(cli, "fetch_arena_board", fake_fetch)
+
+    assert cli.main(["--api-key", "test", "--format", "json"]) == 0
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["arena"]["available"] == []
+    assert payload["models"][0]["matched"] is True
+    assert captured.err.count("LMArena no responde") == 1
+
+
 def test_main_warns_once_when_every_board_fails(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

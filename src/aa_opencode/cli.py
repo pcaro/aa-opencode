@@ -60,7 +60,9 @@ def fetch_arena_boards() -> dict[str, list[dict]]:
     for board in ARENA_BOARDS:
         try:
             boards[board] = fetch_arena_board(board)
-        except httpx.HTTPError as error:
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            # A malformed row is as fatal to one board as a dead endpoint, and just as
+            # local: degrade this board and keep the rest of the report.
             boards[board] = []
             failures.append((board, str(error)))
     if len(failures) == len(ARENA_BOARDS):

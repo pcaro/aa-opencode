@@ -22,14 +22,18 @@ _NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
 
 
 def _normalize_row(row: dict) -> dict:
-    """Flatten one leaderboard row into the fields the report needs."""
+    """Flatten one leaderboard row into the fields the report needs.
+
+    Every field is optional on the wire: a row with a null `rating`, `vote_count` or
+    `model_name` must not cost the whole board, so missing values stay `None` and
+    `fetch_arena_board` drops the rows that cannot be used.
+    """
     return {
-        "model_name": row["model_name"],
+        "model_name": row.get("model_name"),
         "organization": row.get("organization"),
         "license": row.get("license"),
-        "value": row["rating"] if "rating" in row else row.get("score"),
+        "value": row.get("rating") if row.get("rating") is not None else row.get("score"),
         "rank": int(row["rank"]) if row.get("rank") is not None else None,
-        "votes": int(row["vote_count"] if "vote_count" in row else row["session_count"]),
         "publish_date": row.get("leaderboard_publish_date"),
     }
 
@@ -52,13 +56,18 @@ def fetch_arena_board(board: str) -> list[dict]:
         )
         resp.raise_for_status()
         payload = resp.json()
-        rows = [item["row"] for item in payload.get("rows", [])]
+        rows = [item["row"] for item in payload.get("rows") or []]
         # Only the `overall` category is comparable across models.
         overall = [row for row in rows if row.get("category") == "overall"]
-        if page and not overall:
+        # Stop on an empty page, or once `overall` runs out after we have seen some:
+        # the rows are grouped by category but `overall` need not be the first block.
+        if not rows or (entries and not overall):
             break
-        entries.extend(_normalize_row(row) for row in overall)
-        if offset + PAGE_SIZE >= payload.get("num_rows_total", 0):
+        for row in overall:
+            entry = _normalize_row(row)
+            if entry["model_name"] and entry["value"] is not None:
+                entries.append(entry)
+        if offset + PAGE_SIZE >= (payload.get("num_rows_total") or 0):
             break
     entries.sort(key=lambda entry: entry["value"], reverse=True)
     return entries
@@ -78,8 +87,14 @@ def normalize_arena_name(value: str) -> list[str]:
 
 
 def _is_numeric_tail(tail: list[str]) -> bool:
-    """Whether these trailing tokens can only be a checkpoint or version stamp."""
-    return bool(tail) and all(token.isdigit() for token in tail)
+    """Whether these trailing tokens can only be a checkpoint or version stamp.
+
+    Only a date-like run of at least four digits (`0902`, `20261017`) is a stamp. A
+    bare version number (`2`, `3`) is not: `GLM-5.2 (Max)` normalizes to
+    `["glm", "5", "2"]`, and the shorter sibling `glm-5` must not read that `2` as
+    its own checkpoint.
+    """
+    return bool(tail) and all(token.isdigit() and len(token) >= 4 for token in tail)
 
 
 def match_arena_model(opencode_id: str, entries: list[dict]) -> dict | None:
@@ -90,15 +105,19 @@ def match_arena_model(opencode_id: str, entries: list[dict]) -> dict | None:
 
     1. Identical tokens, once effort markers and noise are dropped — the same model
        listed with a different effort level.
-    2. The tokens of the model plus a numeric tail — `DeepSeek-V4.1-Flash-20261017`
-       is `deepseek-v4.1-flash` with a date appended. A numeric tail is read as a
-       checkpoint stamp, so an ID that ends on a bare version number would absorb the
-       next one (`glm-5` onto `GLM-5.3`); no catalog ID does that today.
+    2. The tokens of the model plus a checkpoint stamp — `DeepSeek-V4.1-Flash-20261017`
+       is `deepseek-v4.1-flash` with a date appended. Only a four-digit-or-longer
+       numeric token is a stamp, never a bare version number: `glm-5` ends on a
+       version number itself, and reading the `.2` of `GLM-5.2 (Max)` as a stamp made
+       it absorb that model's agent score. Catalog IDs do end on bare version numbers
+       (`glm-5`, `gpt-5`), so the bound is what keeps this rule honest.
 
     Substring overlap is deliberately absent: `glm-5.3` is a substring of
     `GLM-5.3-Flash`, and a false positive here reports a plausible, wrong number.
     """
     target = normalize_arena_name(opencode_id)
+    if not target:
+        return None
     same_model: list[dict] = []
     dated_model: list[dict] = []
     for entry in entries:

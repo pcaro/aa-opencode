@@ -102,6 +102,43 @@ def test_match_arena_model_does_not_match_a_longer_model_name() -> None:
     assert arena.match_arena_model("glm-5.3", flash_only) is None
 
 
+def test_match_arena_model_does_not_read_a_version_number_as_a_checkpoint() -> None:
+    """`glm-5` is a prefix of `GLM-5.2 (Max)`, but that `.2` is a newer model."""
+    newer_only = [entry for entry in WEBDEV_ENTRIES if entry["model_name"] == "GLM-5.3 (Max)"]
+
+    assert arena.match_arena_model("glm-5", newer_only) is None
+    assert arena.match_arena_model("glm-5.3", newer_only) is not None
+
+
+def test_match_arena_model_still_reads_a_four_digit_checkpoint() -> None:
+    dated_only = [
+        entry
+        for entry in WEBDEV_ENTRIES
+        if entry["model_name"] == "DeepSeek-V4.1-Flash-20261017 (Max)"
+    ]
+
+    match = arena.match_arena_model("deepseek-v4.1-flash", dated_only)
+
+    assert match is not None
+    assert match["model_name"] == "DeepSeek-V4.1-Flash-20261017 (Max)"
+
+
+def test_match_arena_model_prefers_the_same_model_over_a_higher_dated_one() -> None:
+    entries = [
+        arena._normalize_row(_row("DeepSeek-V4.1-Flash", 1590.0, 500.0, 4)),
+        arena._normalize_row(_row("DeepSeek-V4.1-Flash-20261017 (Max)", 1600.3, 2100.0, 5)),
+    ]
+
+    match = arena.match_arena_model("deepseek-v4.1-flash", entries)
+
+    assert match is not None
+    assert match["model_name"] == "DeepSeek-V4.1-Flash"
+
+
+def test_match_arena_model_returns_none_for_a_name_with_only_noise() -> None:
+    assert arena.match_arena_model("preview", WEBDEV_ENTRIES) is None
+
+
 def test_match_arena_model_returns_none_for_an_absent_model() -> None:
     assert arena.match_arena_model("iceman-contributor-free", WEBDEV_ENTRIES) is None
 
@@ -131,19 +168,23 @@ def test_normalize_row_flattens_a_rating_row() -> None:
         "license": "Proprietary",
         "value": 1695.1,
         "rank": 1,
-        "votes": 4403,
         "publish_date": "2026-10-28",
     }
-    assert isinstance(normalized["votes"], int)
 
 
-def test_normalize_row_reads_score_and_sessions_from_the_agent_board() -> None:
+def test_normalize_row_reads_the_centered_score_from_the_agent_board() -> None:
     normalized = arena._normalize_row(AGENT_ROW)
 
     assert set(normalized) == set(arena._normalize_row(WEBDEV_ROWS[0]))
     assert normalized["value"] == pytest.approx(0.20939685760341706)
-    assert normalized["votes"] == 13584
-    assert isinstance(normalized["votes"], int)
+    assert normalized["rank"] == 1
+
+
+def test_normalize_row_keeps_a_null_rating_as_none() -> None:
+    """A null `rating`/`vote_count` row must not raise while normalizing."""
+    normalized = arena._normalize_row({**WEBDEV_ROWS[0], "rating": None, "vote_count": None})
+
+    assert normalized["value"] is None
 
 
 class _FakeResponse:
@@ -221,3 +262,44 @@ def test_fetch_arena_board_respects_the_page_cap(monkeypatch: pytest.MonkeyPatch
 
     assert len(calls) == arena.MAX_PAGES
     assert len(entries) == arena.MAX_PAGES
+
+
+def test_fetch_arena_board_scans_past_pages_without_overall_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`overall` need not be the first block, so a page without it cannot end the scan."""
+    coding = [_row("Gemini 4 Carbon (High)", 1600.0, 900.0, 2, category="coding")]
+    pages = [
+        _payload(coding, total=300),
+        _payload(coding, total=300),
+        _payload([_row("Kimi K3.1 Pro (Max)", 1695.1, 4403.0, 1)], total=300),
+    ]
+    calls = _install_fake_get(monkeypatch, pages)
+
+    entries = arena.fetch_arena_board("webdev")
+
+    assert [entry["model_name"] for entry in entries] == ["Kimi K3.1 Pro (Max)"]
+    assert len(calls) == 3
+
+
+def test_fetch_arena_board_drops_rows_without_a_usable_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [
+        _row("Kimi K3.1 Pro (Max)", 1695.1, 4403.0, 1),
+        {**_row("GLM-5.3 (Max)", 1610.5, 2700.0, 4), "rating": None},
+        {**_row("Muse Spark 1.2 (xHigh)", 1580.2, 1700.0, 7), "model_name": None},
+    ]
+    _install_fake_get(monkeypatch, [_payload(rows, total=3)])
+
+    entries = arena.fetch_arena_board("webdev")
+
+    assert [entry["model_name"] for entry in entries] == ["Kimi K3.1 Pro (Max)"]
+
+
+def test_fetch_arena_board_tolerates_a_payload_with_null_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_get(monkeypatch, [{"rows": None, "num_rows_total": None}])
+
+    assert arena.fetch_arena_board("agent") == []
