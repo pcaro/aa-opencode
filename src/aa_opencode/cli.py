@@ -12,6 +12,7 @@ from aa_opencode import __version__
 from aa_opencode.arena import ARENA_BOARDS, fetch_arena_board
 from aa_opencode.clients import (
     CATALOGS,
+    RateLimitedError,
     blended_3_to_1,
     fetch_aa_models,
     fetch_catalog_metadata,
@@ -124,13 +125,36 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _format_retry_after(value: str | None) -> str:
+    """Turn the `retry-after` header into the wait the user actually has to sit out."""
+    try:
+        seconds = int(value or "")
+    except ValueError:
+        return "en unos minutos"
+    if seconds < 60:
+        return f"en {seconds} s"
+    hours, minutes = divmod(seconds // 60, 60)
+    if hours:
+        return f"en {hours} h {minutes} min"
+    return f"en {minutes} min"
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     api_key = resolve_api_key(args.api_key)
 
     opencode_url = args.opencode_url or CATALOGS[args.catalog][0]
 
-    aa_models, index_version = fetch_aa_models(api_key)
+    try:
+        aa_models, index_version = fetch_aa_models(api_key)
+    except RateLimitedError as error:
+        print(
+            "Artificial Analysis ha agotado la cuota diaria del plan Free (100 peticiones; "
+            f"cada ejecución gasta 4). Vuelve a intentarlo {_format_retry_after(error.retry_after)}.",
+            file=sys.stderr,
+        )
+        return 1
+
     opencode_ids = fetch_opencode_models(opencode_url)
     metadata = fetch_catalog_metadata(args.catalog)
     arena_boards = fetch_arena_boards()

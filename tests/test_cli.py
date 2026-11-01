@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from aa_opencode import cli
+from aa_opencode.clients import RateLimitedError
 
 AA_MODEL = {
     "name": "Kimi K3.1 Pro",
@@ -144,3 +145,29 @@ def test_main_sorts_by_an_arena_board(
         "kimi-k3.1-pro",
         "beam-free",
     ]
+
+
+def test_main_explains_an_exhausted_quota_instead_of_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A 429 on the free tier is expected usage, not a crash: say when to come back."""
+
+    def quota_spent(api_key: str) -> tuple[list[dict], float | None]:
+        raise RateLimitedError("7085")
+
+    monkeypatch.setattr(cli, "fetch_aa_models", quota_spent)
+
+    assert cli.main(["--api-key", "test"]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "cuota diaria" in captured.err
+    assert "en 1 h 58 min" in captured.err
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [(None, "en unos minutos"), ("45", "en 45 s"), ("600", "en 10 min"), ("7085", "en 1 h 58 min")],
+)
+def test_format_retry_after(header: str | None, expected: str) -> None:
+    assert cli._format_retry_after(header) == expected
