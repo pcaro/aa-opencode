@@ -329,7 +329,10 @@ variante. `arena_webdev_rank` es el puesto en el tablero WebDev.
 4. Empareja cada modelo de OpenCode con su entrada en Artificial Analysis: slug exacto,
    luego la subcadena más corta y por último el conjunto de tokens idéntico. Para Arena el
    emparejamiento es por tokens, sin subcadenas, para no confundir `glm-5.3` con
-   `glm-5.3-flash`.
+   `glm-5.3-flash`. Acepta además un sello de checkpoint al final del nombre de LMArena
+   (`DeepSeek-V4.1-Flash-20261017` es `deepseek-v4.1-flash`), pero solo si tiene cuatro
+   dígitos o más: un `.2` suelto es una versión más nueva, no una fecha, y darlo por sello
+   le endosaba a `glm-5` el `Agent score` de `GLM-5.2`.
 5. Añade el precio de OpenCode, leído de [models.dev](https://models.dev) y convertido a
    precio blended 3:1 por millón de tokens.
 6. Muestra la tabla principal, la de Arena, el ranking calidad/precio y las mayores
