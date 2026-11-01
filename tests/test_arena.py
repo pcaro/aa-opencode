@@ -123,6 +123,15 @@ def test_match_arena_model_still_reads_a_four_digit_checkpoint() -> None:
     assert match["model_name"] == "DeepSeek-V4.1-Flash-20261017 (Max)"
 
 
+def test_match_arena_model_does_not_read_a_dropped_noise_suffix_as_a_checkpoint() -> None:
+    """`preview` is dropped, so `step-5-preview` must not fall through to `Step 5.1`."""
+    newer_only = [arena._normalize_row(_row("Step 5.1 (High)", 1580.0, 900.0, 7))]
+    same_model = [arena._normalize_row(_row("Step 5 Preview (High)", 1571.0, 800.0, 8))]
+
+    assert arena.match_arena_model("step-5-preview", newer_only) is None
+    assert arena.match_arena_model("step-5-preview", same_model) is not None
+
+
 def test_match_arena_model_prefers_the_same_model_over_a_higher_dated_one() -> None:
     entries = [
         arena._normalize_row(_row("DeepSeek-V4.1-Flash", 1590.0, 500.0, 4)),

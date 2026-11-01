@@ -27,7 +27,6 @@ TEXT_ROW = {
     "license": "Proprietary",
     "value": 1464.5,
     "rank": 3,
-    "votes": 4403,
     "publish_date": "2026-10-28",
 }
 
