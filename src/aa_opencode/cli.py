@@ -6,7 +6,10 @@ import argparse
 import os
 import sys
 
+import httpx
+
 from aa_opencode import __version__
+from aa_opencode.arena import ARENA_BOARDS, fetch_arena_board
 from aa_opencode.clients import (
     CATALOGS,
     blended_3_to_1,
@@ -15,7 +18,7 @@ from aa_opencode.clients import (
     fetch_opencode_models,
 )
 from aa_opencode.matching import match_model
-from aa_opencode.output import build_record, render_human, render_json
+from aa_opencode.output import arena_metadata, build_record, render_human, render_json
 
 SORT_KEYS = {
     "intelligence": "intelligence_index",
@@ -23,6 +26,9 @@ SORT_KEYS = {
     "speed": "output_tokens_per_second",
     "ttft": "time_to_first_token_seconds",
     "price": "price_blended_1m",
+    "arena-text": "arena_text",
+    "arena-webdev": "arena_webdev",
+    "arena-agent": "arena_agent",
     "name": "opencode_id",
 }
 
@@ -47,6 +53,32 @@ def sort_records(records: list[dict], sort_key: str) -> list[dict]:
     unmatched = [r for r in records if r.get(field) is None]
     matched.sort(key=lambda r: r[field], reverse=reverse)
     return matched + unmatched
+
+
+def fetch_arena_boards() -> dict[str, list[dict]]:
+    """Fetch every Arena board, degrading a broken one to an empty list.
+
+    Each board is fetched on its own so one failure costs one column instead of the
+    whole report: the user gets a warning on stderr and keeps the AA tables.
+    """
+    boards: dict[str, list[dict]] = {}
+    failures: list[tuple[str, str]] = []
+    for board in ARENA_BOARDS:
+        try:
+            boards[board] = fetch_arena_board(board)
+        except httpx.HTTPError as error:
+            boards[board] = []
+            failures.append((board, str(error)))
+    if len(failures) == len(ARENA_BOARDS):
+        print(
+            "Aviso: LMArena no responde (fallan los tres tableros); el informe sale "
+            "solo con los datos de Artificial Analysis.",
+            file=sys.stderr,
+        )
+    else:
+        for board, error in failures:
+            print(f"Aviso: sin datos del tablero Arena «{board}» ({error}).", file=sys.stderr)
+    return boards
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -105,9 +137,11 @@ def main(argv: list[str] | None = None) -> int:
     aa_models, index_version = fetch_aa_models(api_key)
     opencode_ids = fetch_opencode_models(opencode_url)
     metadata = fetch_catalog_metadata(args.catalog)
+    arena_boards = fetch_arena_boards()
 
     records = [
-        build_record(model_id, match_model(model_id, aa_models)) for model_id in opencode_ids
+        build_record(model_id, match_model(model_id, aa_models), arena_boards)
+        for model_id in opencode_ids
     ]
     for record in records:
         meta = metadata.get(record["opencode_id"], {})
@@ -128,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.format == "json":
-        print(render_json(records, opencode_url, index_version))
+        print(render_json(records, opencode_url, index_version, arena_metadata(arena_boards)))
     else:
         render_human(records, args.show_unmatched, args.top, args.catalog, index_version)
 

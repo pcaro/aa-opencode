@@ -8,7 +8,11 @@ from datetime import datetime, timezone
 from rich.console import Console
 from rich.table import Table
 
+from aa_opencode.arena import ARENA_BOARDS, match_arena_model
 from aa_opencode.clients import blended_3_to_1
+
+ARENA_SOURCE = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
+ARENA_LICENSE = "CC-BY-4.0"
 
 # Evaluation keys exposed by the free Artificial Analysis API.
 INTELLIGENCE_KEY = "artificial_analysis_intelligence_index"
@@ -22,30 +26,71 @@ VALUE_CATEGORIES = [
 ]
 
 
-def build_record(opencode_id: str, aa_model: dict | None) -> dict:
-    """Flatten an AA model entry into a single record for one OpenCode model."""
-    if aa_model is None:
-        return {"opencode_id": opencode_id, "matched": False}
+def _arena_fields(opencode_id: str, arena_entries: dict[str, list[dict]]) -> dict:
+    """Fill the Arena columns of one record, board by board."""
+    matches = {
+        board: match_arena_model(opencode_id, arena_entries.get(board, []))
+        for board in ARENA_BOARDS
+    }
+    fields: dict = {}
+    for board, match in matches.items():
+        fields[f"arena_{board}"] = match["value"] if match is not None else None
+        fields[f"arena_{board}_name"] = match["model_name"] if match is not None else None
+    # WebDev is the board the report ranks models by, so it keeps its rank.
+    webdev = matches["webdev"]
+    fields["arena_webdev_rank"] = webdev["rank"] if webdev is not None else None
+    return fields
 
-    evaluations = aa_model.get("evaluations") or {}
-    pricing = aa_model.get("pricing") or {}
-    performance = aa_model.get("performance") or {}
-    creator = aa_model.get("model_creator") or {}
-    price_input = pricing.get("price_1m_input_tokens")
-    price_output = pricing.get("price_1m_output_tokens")
+
+def build_record(
+    opencode_id: str, aa_model: dict | None, arena_entries: dict[str, list[dict]]
+) -> dict:
+    """Flatten one OpenCode model into a record: AA benchmarks plus Arena rows.
+
+    Both sources are independent, and the Arena fields are added outside the AA
+    branch: a model missing from Artificial Analysis can still hold an Elo.
+    """
+    if aa_model is None:
+        record: dict = {"opencode_id": opencode_id, "matched": False}
+    else:
+        evaluations = aa_model.get("evaluations") or {}
+        pricing = aa_model.get("pricing") or {}
+        performance = aa_model.get("performance") or {}
+        creator = aa_model.get("model_creator") or {}
+        price_input = pricing.get("price_1m_input_tokens")
+        price_output = pricing.get("price_1m_output_tokens")
+        record = {
+            "opencode_id": opencode_id,
+            "matched": True,
+            "name": aa_model.get("name"),
+            "slug": aa_model.get("slug"),
+            "creator": creator.get("name"),
+            "intelligence_index": evaluations.get(INTELLIGENCE_KEY),
+            "coding_index": evaluations.get(CODING_KEY),
+            "output_tokens_per_second": performance.get("median_output_tokens_per_second"),
+            "time_to_first_token_seconds": performance.get("median_time_to_first_token_seconds"),
+            "price_blended_1m": blended_3_to_1(price_input, price_output),
+            "price_input_1m": price_input,
+            "price_output_1m": price_output,
+        }
+    record.update(_arena_fields(opencode_id, arena_entries))
+    return record
+
+
+def arena_metadata(arena_entries: dict[str, list[dict]]) -> dict:
+    """Describe the Arena payload: attribution, boards that answered, publish date."""
+    published_at = None
+    for board in ARENA_BOARDS:
+        rows = arena_entries.get(board) or []
+        if rows:
+            published_at = rows[0]["publish_date"]
+            break
     return {
-        "opencode_id": opencode_id,
-        "matched": True,
-        "name": aa_model.get("name"),
-        "slug": aa_model.get("slug"),
-        "creator": creator.get("name"),
-        "intelligence_index": evaluations.get(INTELLIGENCE_KEY),
-        "coding_index": evaluations.get(CODING_KEY),
-        "output_tokens_per_second": performance.get("median_output_tokens_per_second"),
-        "time_to_first_token_seconds": performance.get("median_time_to_first_token_seconds"),
-        "price_blended_1m": blended_3_to_1(price_input, price_output),
-        "price_input_1m": price_input,
-        "price_output_1m": price_output,
+        "source": ARENA_SOURCE,
+        "license": ARENA_LICENSE,
+        "boards": list(ARENA_BOARDS),
+        "published_at": published_at,
+        "available": [board for board in ARENA_BOARDS if arena_entries.get(board)],
     }
 
 
@@ -188,12 +233,18 @@ def render_human(
     )
 
 
-def render_json(records: list[dict], opencode_url: str, index_version: float | None) -> str:
+def render_json(
+    records: list[dict],
+    opencode_url: str,
+    index_version: float | None,
+    arena: dict,
+) -> str:
     payload = {
         "source": "https://artificialanalysis.ai/",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "intelligence_index_version": index_version,
         "opencode_url": opencode_url,
+        "arena": arena,
         "models": records,
     }
     return json.dumps(payload, indent=2, ensure_ascii=False)
