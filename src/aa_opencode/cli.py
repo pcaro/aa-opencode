@@ -6,25 +6,26 @@ import argparse
 import os
 import sys
 
+import httpx
+
 from aa_opencode import __version__
+from aa_opencode.arena import ARENA_BOARDS, fetch_arena_board
 from aa_opencode.clients import (
     CATALOGS,
+    RateLimitedError,
     blended_3_to_1,
     fetch_aa_models,
     fetch_catalog_metadata,
     fetch_opencode_models,
 )
 from aa_opencode.matching import match_model
-from aa_opencode.output import build_record, render_human, render_json
-
-SORT_KEYS = {
-    "intelligence": "intelligence_index",
-    "coding": "coding_index",
-    "speed": "output_tokens_per_second",
-    "ttft": "time_to_first_token_seconds",
-    "price": "price_blended_1m",
-    "name": "opencode_id",
-}
+from aa_opencode.output import (
+    SORT_KEYS,
+    arena_metadata,
+    build_record,
+    render_human,
+    render_json,
+)
 
 
 def resolve_api_key(cli_key: str | None) -> str:
@@ -47,6 +48,34 @@ def sort_records(records: list[dict], sort_key: str) -> list[dict]:
     unmatched = [r for r in records if r.get(field) is None]
     matched.sort(key=lambda r: r[field], reverse=reverse)
     return matched + unmatched
+
+
+def fetch_arena_boards() -> dict[str, list[dict]]:
+    """Fetch every Arena board, degrading a broken one to an empty list.
+
+    Each board is fetched on its own so one failure costs one column instead of the
+    whole report: the user gets a warning on stderr and keeps the AA tables.
+    """
+    boards: dict[str, list[dict]] = {}
+    failures: list[tuple[str, str]] = []
+    for board in ARENA_BOARDS:
+        try:
+            boards[board] = fetch_arena_board(board)
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            # A malformed row is as fatal to one board as a dead endpoint, and just as
+            # local: degrade this board and keep the rest of the report.
+            boards[board] = []
+            failures.append((board, str(error)))
+    if len(failures) == len(ARENA_BOARDS):
+        print(
+            "Aviso: LMArena no responde (fallan los tres tableros); el informe sale "
+            "solo con los datos de Artificial Analysis.",
+            file=sys.stderr,
+        )
+    else:
+        for board, error in failures:
+            print(f"Aviso: sin datos del tablero Arena «{board}» ({error}).", file=sys.stderr)
+    return boards
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -96,18 +125,43 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _format_retry_after(value: str | None) -> str:
+    """Turn the `retry-after` header into the wait the user actually has to sit out."""
+    try:
+        seconds = int(value or "")
+    except ValueError:
+        return "en unos minutos"
+    if seconds < 60:
+        return f"en {seconds} s"
+    hours, minutes = divmod(seconds // 60, 60)
+    if hours:
+        return f"en {hours} h {minutes} min"
+    return f"en {minutes} min"
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     api_key = resolve_api_key(args.api_key)
 
     opencode_url = args.opencode_url or CATALOGS[args.catalog][0]
 
-    aa_models, index_version = fetch_aa_models(api_key)
+    try:
+        aa_models, index_version = fetch_aa_models(api_key)
+    except RateLimitedError as error:
+        print(
+            "Artificial Analysis ha agotado la cuota diaria del plan Free (100 peticiones; "
+            f"cada ejecución gasta 4). Vuelve a intentarlo {_format_retry_after(error.retry_after)}.",
+            file=sys.stderr,
+        )
+        return 1
+
     opencode_ids = fetch_opencode_models(opencode_url)
     metadata = fetch_catalog_metadata(args.catalog)
+    arena_boards = fetch_arena_boards()
 
     records = [
-        build_record(model_id, match_model(model_id, aa_models)) for model_id in opencode_ids
+        build_record(model_id, match_model(model_id, aa_models), arena_boards)
+        for model_id in opencode_ids
     ]
     for record in records:
         meta = metadata.get(record["opencode_id"], {})
@@ -128,9 +182,9 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.format == "json":
-        print(render_json(records, opencode_url, index_version))
+        print(render_json(records, opencode_url, index_version, arena_metadata(arena_boards)))
     else:
-        render_human(records, args.show_unmatched, args.top, args.catalog, index_version)
+        render_human(records, args.show_unmatched, args.top, args.catalog, args.sort, index_version)
 
     return 0
 

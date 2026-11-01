@@ -17,6 +17,18 @@ CATALOGS = {
 }
 
 
+class RateLimitedError(RuntimeError):
+    """The free tier refused the request because its daily quota is spent.
+
+    The endpoint answers 429 with a `retry-after` header in seconds, which is the
+    only useful thing to tell the user: the log itself is not actionable.
+    """
+
+    def __init__(self, retry_after: str | None) -> None:
+        self.retry_after = retry_after
+        super().__init__("rate limited")
+
+
 def fetch_aa_models(api_key: str) -> tuple[list[dict], float | None]:
     """Return (models, intelligence index version) from the Artificial Analysis free API.
 
@@ -32,6 +44,8 @@ def fetch_aa_models(api_key: str) -> tuple[list[dict], float | None]:
             headers={"x-api-key": api_key},
             timeout=30.0,
         )
+        if resp.status_code == 429:
+            raise RateLimitedError(resp.headers.get("retry-after"))
         resp.raise_for_status()
         payload = resp.json()
         version = payload.get("intelligence_index_version", version)
