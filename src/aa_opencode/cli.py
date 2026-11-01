@@ -18,19 +18,13 @@ from aa_opencode.clients import (
     fetch_opencode_models,
 )
 from aa_opencode.matching import match_model
-from aa_opencode.output import arena_metadata, build_record, render_human, render_json
-
-SORT_KEYS = {
-    "intelligence": "intelligence_index",
-    "coding": "coding_index",
-    "speed": "output_tokens_per_second",
-    "ttft": "time_to_first_token_seconds",
-    "price": "price_blended_1m",
-    "arena-text": "arena_text",
-    "arena-webdev": "arena_webdev",
-    "arena-agent": "arena_agent",
-    "name": "opencode_id",
-}
+from aa_opencode.output import (
+    SORT_KEYS,
+    arena_metadata,
+    build_record,
+    render_human,
+    render_json,
+)
 
 
 def resolve_api_key(cli_key: str | None) -> str:
@@ -164,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.format == "json":
         print(render_json(records, opencode_url, index_version, arena_metadata(arena_boards)))
     else:
-        render_human(records, args.show_unmatched, args.top, args.catalog, index_version)
+        render_human(records, args.show_unmatched, args.top, args.catalog, args.sort, index_version)
 
     return 0
 
