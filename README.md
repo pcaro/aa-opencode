@@ -5,13 +5,31 @@ Compara los modelos que ofrece [OpenCode](https://opencode.ai) con los benchmark
 una sola tabla. Añade, aparte, la preferencia humana de [LMArena](https://lmarena.ai) en
 tres tableros: texto, desarrollo web y agentes.
 
-![Salida de aa-opencode con el catálogo Go](docs/aa-opencode.png)
+El demo es un cast de terminal versionado junto al código. Para verlo:
+
+```bash
+asciinema play docs/aa-opencode.cast
+```
+
+Y para regrabarlo tras un cambio de salida (`uvx asciinema` si no lo tienes
+instalado):
+
+```bash
+asciinema rec docs/aa-opencode.cast --overwrite --headless \
+  --window-size 120x58 --idle-time-limit 2 \
+  -t "aa-opencode: catálogo Go frente a Artificial Analysis y LMArena" \
+  -c "uv run aa-opencode --catalog go"
+```
 
 ## Requisitos
 
 - Python 3.10+
 - Una API key gratuita de Artificial Analysis
   ([crear cuenta](https://artificialanalysis.ai/login) → generar API key)
+
+El plan Free da 100 peticiones al día y cada ejecución gasta 4, así que salen unas 25
+consultas diarias. Cuando se agotan, la herramienta no revienta: lo dice por stderr y te
+indica cuánto falta para que se reponga la cuota.
 
 ## Instalación
 
